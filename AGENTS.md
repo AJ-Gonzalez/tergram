@@ -40,3 +40,29 @@ Otherwise make a local build for the Linux target.
 - Release binaries get their version injected from the git tag via
   `-X main.version=...` (see `.github/workflows/release.yml`), so a tag like `v0.1.1`
   reports `tergram v0.1.1` from `tergram -version`.
+
+## Build
+
+Requires Go 1.26+. The module root is `tergram`.
+
+Local Linux build:
+
+```sh
+go build -o tergram ./cmd/tergram
+```
+
+Telegram `api_id`/`api_hash` identify the app; each user logs in with their own account
+(QR). They come from `APP_ID`/`APP_HASH` env vars by default, with a build-time fallback
+that can be baked in so a binary works without env vars:
+
+```sh
+go build -ldflags "-X main.bundleAppID=API_ID -X main.bundleAppHash=API_HASH" -o tergram ./cmd/tergram
+```
+
+Runtime precedence: `APP_ID`/`APP_HASH` env → bundled values (`bundleAppID`/
+`bundleAppHash` in `cmd/tergram/main.go`) → error prompting to set them.
+
+Do NOT commit real api_id/api_hash to the repo. Prefer env vars or ldflags injection.
+
+Cross-compile matrix (releases build these; local smoke test only needs linux amd64):
+`GOOS` ∈ {linux, darwin, windows} × `GOARCH` ∈ {amd64, arm64}, `CGO_ENABLED=0`.

@@ -25,6 +25,31 @@ I wanted a way to quickly send or read messages, without needing to switch conte
 
 No images, no link preview, no interest in adding them. 
 
+## Building
+
+Requires Go 1.26+. Build locally:
+
+```sh
+go build -o tergram ./cmd/tergram
+```
+
+The app is identified by a Telegram **api_id / api_hash** pair (the app), while each
+user logs in with their **own** account. By default tergram reads these from the
+`APP_ID` / `APP_HASH` environment variables. To bake a pair in (e.g. to hand someone a
+binary that just works), set them at build time:
+
+```sh
+go build -ldflags "-X main.bundleAppID=YOUR_API_ID -X main.bundleAppHash=YOUR_API_HASH" -o tergram ./cmd/tergram
+```
+
+Runtime precedence: `APP_ID` / `APP_HASH` env vars win; otherwise the bundled values
+are used. Note: your api_id/api_hash identify your app to Telegram and can't be rotated
+easily — be sparing about baking them into broad distribution.
+
+Notes:
+- `tergram -demo` runs offline with synthetic data (no credentials needed).
+- `tergram -version` prints the version.
+
 ## License
 
 [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)
