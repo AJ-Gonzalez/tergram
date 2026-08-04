@@ -8,3 +8,7 @@ session.json
 # Editor / OS
 *.swp
 .DS_Store
+
+# Agent/design working docs — kept locally, not versioned
+AGENTS.md
+DESIGN.md
