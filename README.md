@@ -12,7 +12,7 @@ What it says on the tin, minimal terminal client for TG.
 
 ## Why? 
 
-I keep hitting my terminal hotkey by force habit because I no a lot of things in the terminal, and telegram desktop is slow to load. 
+I keep hitting my terminal hotkey by force habit because I do a lot of things in the terminal, and telegram desktop is slow to load. 
 
 I wanted a way to quickly send or read messages, without needing to switch context. I could open tmux or a new tab or terminal window. 
 
