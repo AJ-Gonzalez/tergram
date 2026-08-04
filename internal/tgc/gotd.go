@@ -135,7 +135,10 @@ func Connect(ctx context.Context, appID int, appHash, sessionPath string) (*Gotd
 // loginQR runs the interactive QR login, waiting until the user scans it.
 func (c *GotdClient) loginQR(ctx context.Context, dispatcher tg.UpdateDispatcher) error {
 	loggedIn := qrlogin.OnLoginToken(dispatcher)
-	qr := qrlogin.NewQR(c.api, c.appID, c.appHash, qrlogin.Options{})
+	// c.client.QR() is pre-wired with gotd's Migrate handler, so if the account
+	// lives on a different data center (e.g. DC 1) the QR helper reconnects there
+	// and retries automatically instead of failing with "migration to N needed".
+	qr := c.client.QR()
 	show := func(ctx context.Context, token qrlogin.Token) error {
 		fmt.Fprintln(os.Stderr, "\nScan this QR code with Telegram (Settings → Devices → Link Desktop Device):")
 		qrterminal.Generate(token.URL(), qrterminal.L, os.Stderr)
