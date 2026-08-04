@@ -25,6 +25,7 @@ import (
 	"github.com/gotd/td/telegram/query/dialogs"
 	"github.com/gotd/td/telegram/query/messages"
 	"github.com/gotd/td/tg"
+	"github.com/gotd/td/tgerr"
 	"github.com/mdp/qrterminal/v3"
 )
 
@@ -95,7 +96,18 @@ func Connect(ctx context.Context, appID int, appHash, sessionPath string) (*Gotd
 				return err
 			}
 			if !status.Authorized {
-				if err := c.loginQR(ctx, dispatcher); err != nil {
+				err := c.loginQR(ctx, dispatcher)
+				switch {
+				case err == nil:
+					// authorized via QR
+				case tgerr.Is(err, "SESSION_PASSWORD_NEEDED"):
+					// Account has 2FA: the QR scan links the device, but the
+					// cloud password is still required to finish authorization.
+					if err := c.password2FA(ctx, gc.Auth()); err != nil {
+						c.finish(err)
+						return err
+					}
+				default:
 					fmt.Fprintln(os.Stderr, "\nQR login failed ("+err.Error()+"); using phone/code instead.")
 					if err := gc.Auth().IfNecessary(ctx, phoneFlow); err != nil {
 						c.finish(err)
@@ -132,6 +144,27 @@ func (c *GotdClient) loginQR(ctx context.Context, dispatcher tg.UpdateDispatcher
 	}
 	_, err := qr.Auth(ctx, loggedIn, show)
 	return err
+}
+
+// password2FA prompts for and submits the account's cloud password (2FA),
+// retrying on an invalid password until accepted or input ends.
+func (c *GotdClient) password2FA(ctx context.Context, a *auth.Client) error {
+	for {
+		fmt.Fprint(os.Stderr, "\nEnter 2FA password: ")
+		pwd, err := term.ReadPassword(int(syscall.Stdin))
+		fmt.Fprintln(os.Stderr)
+		if err != nil {
+			return err
+		}
+		if _, err := a.Password(ctx, strings.TrimSpace(string(pwd))); err != nil {
+			if errors.Is(err, auth.ErrPasswordInvalid) {
+				fmt.Fprintln(os.Stderr, "Wrong password, try again.")
+				continue
+			}
+			return err
+		}
+		return nil
+	}
 }
 
 // finish records the auth outcome and releases Connect (and Dialogs/Messages/Send).
