@@ -98,6 +98,9 @@ func Connect(ctx context.Context, appID int, appHash, sessionPath string) (*Gotd
 			if !status.Authorized {
 				err := c.loginQR(ctx, dispatcher)
 				switch {
+				case tgerr.Is(err, "FLOOD_WAIT"):
+					c.finish(resolveFlood(ctx, err))
+					return err
 				case err == nil:
 					// authorized via QR
 				case tgerr.Is(err, "SESSION_PASSWORD_NEEDED"):
@@ -109,9 +112,9 @@ func Connect(ctx context.Context, appID int, appHash, sessionPath string) (*Gotd
 					}
 				default:
 					fmt.Fprintln(os.Stderr, "\nQR login failed ("+err.Error()+"); using phone/code instead.")
-					if err := gc.Auth().IfNecessary(ctx, phoneFlow); err != nil {
-						c.finish(err)
-						return err
+					if perr := gc.Auth().IfNecessary(ctx, phoneFlow); perr != nil {
+						c.finish(resolveFlood(ctx, perr))
+						return perr
 					}
 				}
 			}
@@ -179,6 +182,18 @@ func (c *GotdClient) finish(err error) {
 			close(c.ready)
 		}
 	})
+}
+
+// resolveFlood turns a FLOOD_WAIT (Telegram rate-limit) error into a friendly
+// one, first waiting out the required duration so we don't hammer the server.
+// Non-flood errors pass through unchanged.
+func resolveFlood(ctx context.Context, err error) error {
+	if d, ok := tgerr.AsFloodWait(err); ok {
+		fmt.Fprintf(os.Stderr, "\nTelegram is rate-limiting logins (FLOOD_WAIT %v); waiting it out...\n", d)
+		_, _ = tgerr.FloodWait(ctx, err)
+		return fmt.Errorf("telegram rate-limited this login (%v). Wait ~a minute and run tergram again.", d)
+	}
+	return err
 }
 
 func (c *GotdClient) push(m *tg.Message) {
