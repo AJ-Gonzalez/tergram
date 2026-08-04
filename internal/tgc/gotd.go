@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -96,6 +97,22 @@ func Connect(ctx context.Context, appID int, appHash, sessionPath string) (*Gotd
 				return err
 			}
 			if !status.Authorized {
+				// A session file that exists but isn't authorized is a stale /
+				// half-completed login. Keeping it makes every attempt reset
+				// Telegram's rate limit, so offer to clear it (with an
+				// explanation) before starting a fresh login.
+				if fileExists(sessionPath) {
+					cleaned, perr := promptStaleSession(sessionPath)
+					if perr != nil {
+						c.finish(perr)
+						return perr
+					}
+					if !cleaned {
+						err := errors.New("aborted: stale session not cleared. Answer 'y' next time to clear it and retry.")
+						c.finish(err)
+						return err
+					}
+				}
 				err := c.loginQR(ctx, dispatcher)
 				switch {
 				case tgerr.Is(err, "FLOOD_WAIT"):
@@ -194,6 +211,38 @@ func resolveFlood(ctx context.Context, err error) error {
 		return fmt.Errorf("telegram rate-limited this login (%v). Wait ~a minute and run tergram again.", d)
 	}
 	return err
+}
+
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
+}
+
+// promptStaleSession explains why a leftover (unauthorized) session file is bad
+// and asks whether to clear it. Returns true if the file was removed.
+func promptStaleSession(path string) (bool, error) {
+	fmt.Fprintln(os.Stderr, `
+A previous login to Telegram was interrupted partway through: a session file was
+left behind, but your account is not actually signed in with it. Keeping that stale
+session makes every new login attempt reset Telegram's rate limiting (FLOOD_WAIT),
+which is why you keep getting locked out.`)
+	fmt.Fprintf(os.Stderr, "\nClear the old session (%s) and start a fresh login? [y/N] ", path)
+
+	var answer string
+	_, err := fmt.Scanln(&answer)
+	if err != nil && err != io.EOF {
+		return false, err
+	}
+	switch strings.ToLower(strings.TrimSpace(answer)) {
+	case "y", "yes":
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return false, err
+		}
+		fmt.Fprintln(os.Stderr, "Old session cleared.")
+		return true, nil
+	default:
+		return false, nil
+	}
 }
 
 func (c *GotdClient) push(m *tg.Message) {
