@@ -12,15 +12,11 @@ I wanted a way to quickly send or read messages, without needing to switch conte
 
 - [Deepseek V4 Flash 0731](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731)
 - [Oh My Pi harness](https://github.com/can1357/oh-my-pi)
-
 - [Go](https://go.dev/)
 - [Bubble Tea v2](https://github.com/charmbracelet/bubbletea)
 - [Lip Gloss](https://github.com/charmbracelet/lipgloss)
 - [gotd/td](https://github.com/gotd/td)
-
-Credit to the maintainers of [Bubble Tea](https://github.com/charmbracelet/bubbletea),
-[Lip Gloss](https://github.com/charmbracelet/lipgloss), and
-[gotd/td](https://github.com/gotd/td) — tergram is a thin TUI shell over their excellent work.
+- [qrterminal](https://github.com/mdp/qrterminal)
 
 ## Scope
 

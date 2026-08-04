@@ -37,7 +37,7 @@ jobs:
         run: |
           out="tergram-${{ matrix.goos }}-${{ matrix.goarch }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then out="${out}.exe"; fi
-          go build -trimpath -ldflags "-s -w" -o "$out" ./cmd/tergram
+          go build -trimpath -ldflags "-s -w -X main.version=${{ github.ref_name }}" -o "$out" ./cmd/tergram
           echo "artifact=$out" >> "$GITHUB_ENV"
 
       - name: Upload artifact

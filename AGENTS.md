@@ -28,3 +28,15 @@ Example
 
 Only trigger the github actions workflow when there is a tag. 
 Otherwise make a local build for the Linux target. 
+
+## Version
+
+- The current version is `0.1.0` (see `var version` in `cmd/tergram/main.go`).
+- The user will explicitly indicate when the version number should increase. Do NOT
+  bump the version on your own initiative.
+- When the user says a new version, update both the `version` var in
+  `cmd/tergram/main.go` and the matching release tag (git tags drive the release
+  workflow).
+- Release binaries get their version injected from the git tag via
+  `-X main.version=...` (see `.github/workflows/release.yml`), so a tag like `v0.1.1`
+  reports `tergram v0.1.1` from `tergram -version`.

@@ -16,10 +16,23 @@ import (
 	"tergram/internal/tgc"
 )
 
+// version is the semantic version. It defaults to 0.1.0 and can be overridden
+// at build time with: -ldflags "-X main.version=<tag>".
+var version = "0.1.0"
+
 func main() {
-	var demo bool
+	var (
+		demo        bool
+		showVersion bool
+	)
 	flag.BoolVar(&demo, "demo", false, "run with synthetic demo data (no network/credentials)")
+	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.Parse()
+
+	if showVersion {
+		fmt.Println("tergram", version)
+		os.Exit(0)
+	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
