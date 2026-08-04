@@ -1,5 +1,13 @@
 # Tergram: Terminal Telegram Client
 
+```
+ _____                                  
+|_   _|__ _ __ __ _ _ __ __ _ _ __ ___  
+  | |/ _ \ '__/ _` | '__/ _` | '_ ` _ \ 
+  | |  __/ | | (_| | | | (_| | | | | | |
+  |_|\___|_|  \__, |_|  \__,_|_| |_| |_|
+              |___/                     
+```
 What it says on the tin, minimal terminal client for TG. 
 
 ## Why? 
