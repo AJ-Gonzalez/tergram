@@ -12,3 +12,6 @@ session.json
 # Agent/design working docs — kept locally, not versioned
 AGENTS.md
 DESIGN.md
+
+# Local git helper — not distributed
+dumbpush.sh
