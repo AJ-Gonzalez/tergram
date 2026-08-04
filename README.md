@@ -8,6 +8,9 @@ I keep hitting my terminal hotkey by force habit because I no a lot of things in
 
 I wanted a way to quickly send or read messages, without needing to switch context. I could open tmux or a new tab or terminal window. 
 
+[Telegram CLI](https://github.com/vysheng/tg) exists yes, this is much smaller and much leaner.
+
+
 ## Built With
 
 - [Deepseek V4 Flash 0731](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731)

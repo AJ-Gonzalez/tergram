@@ -20,6 +20,18 @@ import (
 // at build time with: -ldflags "-X main.version=<tag>".
 var version = "0.1.0"
 
+// Bundled app credentials, injected at build time (kept out of the repo).
+// Default to empty so source builds always fail fast with a clear message
+// rather than accidentally using a placeholder. Build with:
+//
+//	go build -ldflags "-X main.bundleAppID=12345 -X main.bundleAppHash=abc..."
+//
+// Env vars (APP_ID / APP_HASH) take precedence over these when set.
+var (
+	bundleAppID   = ""
+	bundleAppHash = ""
+)
+
 func main() {
 	var (
 		demo        bool
@@ -41,11 +53,15 @@ func main() {
 	if demo {
 		c = tgc.NewDemo(6)
 	} else {
-		gc, err := tgc.Connect(ctx,
-			envInt("APP_ID"),
-			os.Getenv("APP_HASH"),
-			store.SessionPath(),
-		)
+		appID := envInt("APP_ID")
+		if appID == 0 {
+			appID, _ = strconv.Atoi(bundleAppID)
+		}
+		appHash := os.Getenv("APP_HASH")
+		if appHash == "" {
+			appHash = bundleAppHash
+		}
+		gc, err := tgc.Connect(ctx, appID, appHash, store.SessionPath())
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "tergram:", err)
 			os.Exit(1)
