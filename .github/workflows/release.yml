@@ -1,0 +1,62 @@
+name: release
+
+# Build native tergram binaries and publish a GitHub Release, but ONLY when a
+# tag is pushed (e.g. `git tag v0.1.0 && git push --tags`). Free-tier friendly:
+# no builds on every push/PR.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          # Pure-Go deps only: keep static, trivially cross-compiled binaries.
+          CGO_ENABLED: "0"
+        run: |
+          out="tergram-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then out="${out}.exe"; fi
+          go build -trimpath -ldflags "-s -w" -o "$out" ./cmd/tergram
+          echo "artifact=$out" >> "$GITHUB_ENV"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tergram-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: tergram-*
+
+  publish:
+    name: publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

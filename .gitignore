@@ -1,0 +1,10 @@
+# Build artifacts
+/tergram
+/tergram-*/
+
+# Populated at runtime
+session.json
+
+# Editor / OS
+*.swp
+.DS_Store
