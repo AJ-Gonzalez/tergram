@@ -38,7 +38,7 @@ func NewDemo(n int) *Demo {
 		msgs := make([]Message, 0, len(sampleLines))
 		for j, line := range sampleLines {
 			outgoing := j%3 == 0
-			sender := "Alicia"
+			sender := "Jane Doe"
 			if outgoing {
 				sender = "You"
 			}
