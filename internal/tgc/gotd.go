@@ -93,7 +93,7 @@ func Connect(ctx context.Context, appID int, appHash, sessionPath string) (*Gotd
 		_ = gc.Run(ctx, func(ctx context.Context) error {
 			status, err := gc.Auth().Status(ctx)
 			if err != nil {
-				c.finish(err)
+				c.finish(fmt.Errorf("auth status: %w", err))
 				return err
 			}
 			if !status.Authorized {
@@ -130,7 +130,7 @@ func Connect(ctx context.Context, appID int, appHash, sessionPath string) (*Gotd
 				default:
 					fmt.Fprintln(os.Stderr, "\nQR login failed ("+err.Error()+"); using phone/code instead.")
 					if perr := gc.Auth().IfNecessary(ctx, phoneFlow); perr != nil {
-						c.finish(resolveFlood(ctx, perr))
+						c.finish(resolveFlood(ctx, fmt.Errorf("phone/code login: %w", perr)))
 						return perr
 					}
 				}
@@ -166,7 +166,10 @@ func (c *GotdClient) loginQR(ctx context.Context, dispatcher tg.UpdateDispatcher
 		return nil
 	}
 	_, err := qr.Auth(ctx, loggedIn, show)
-	return err
+	if err != nil {
+		return fmt.Errorf("QR login: %w", err)
+	}
+	return nil
 }
 
 // password2FA prompts for and submits the account's cloud password (2FA),
@@ -184,7 +187,7 @@ func (c *GotdClient) password2FA(ctx context.Context, a *auth.Client) error {
 				fmt.Fprintln(os.Stderr, "Wrong password, try again.")
 				continue
 			}
-			return err
+			return fmt.Errorf("2FA password: %w", err)
 		}
 		return nil
 	}
@@ -199,18 +202,6 @@ func (c *GotdClient) finish(err error) {
 			close(c.ready)
 		}
 	})
-}
-
-// resolveFlood turns a FLOOD_WAIT (Telegram rate-limit) error into a friendly
-// one, first waiting out the required duration so we don't hammer the server.
-// Non-flood errors pass through unchanged.
-func resolveFlood(ctx context.Context, err error) error {
-	if d, ok := tgerr.AsFloodWait(err); ok {
-		fmt.Fprintf(os.Stderr, "\nTelegram is rate-limiting logins (FLOOD_WAIT %v); waiting it out...\n", d)
-		_, _ = tgerr.FloodWait(ctx, err)
-		return fmt.Errorf("telegram rate-limited this login (%v). Wait ~a minute and run tergram again.", d)
-	}
-	return err
 }
 
 func fileExists(p string) bool {
@@ -243,6 +234,31 @@ which is why you keep getting locked out.`)
 	default:
 		return false, nil
 	}
+}
+
+// stepOf extracts a short label from an auth error so flood messages name the
+// failing step instead of a bare rpc error. Errors are wrapped with these
+// prefixes at each step; tgerr's flood detection still unwraps through them.
+func stepOf(err error) string {
+	s := err.Error()
+	for _, p := range []string{"QR login", "phone/code login", "2FA password", "auth status"} {
+		if strings.HasPrefix(s, p) {
+			return p
+		}
+	}
+	return "login"
+}
+
+// resolveFlood turns a FLOOD_WAIT (Telegram rate-limit) error into a friendly
+// one, first waiting out the required duration so we don't hammer the server.
+// Non-flood errors pass through unchanged.
+func resolveFlood(ctx context.Context, err error) error {
+	if d, ok := tgerr.AsFloodWait(err); ok {
+		fmt.Fprintf(os.Stderr, "\nTelegram is throttling the %q step (FLOOD_WAIT %v); waiting it out...\n", stepOf(err), d)
+		_, _ = tgerr.FloodWait(ctx, err)
+		return fmt.Errorf("%s: telegram rate-limited this step (%v). Wait, then retry once.", stepOf(err), d)
+	}
+	return err
 }
 
 func (c *GotdClient) push(m *tg.Message) {
