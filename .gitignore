@@ -1,6 +1,7 @@
 # Build artifacts
 /tergram
 /tergram-*/
+/dist/
 
 # Populated at runtime
 session.json
