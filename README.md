@@ -57,6 +57,48 @@ easily.
 
 Baking them into broad distribution is NOT recommended.
 
+### Setting `APP_ID` / `APP_HASH`
+
+Grab them at [my.telegram.org](https://my.telegram.org) → **API development
+tools** → create an app (login with your phone number; the hash is the
+32-char hex string, not the App ID). Your pair identifies the app to
+Telegram — use your own, don't share it.
+
+Linux / macOS (bash, zsh) — session, or add to `~/.bashrc` / `~/.zshrc`:
+
+```sh
+export APP_ID=1234567
+export APP_HASH=0123456789abcdef0123456789abcdef
+```
+
+Or one-shot without exporting:
+
+```sh
+APP_ID=1234567 APP_HASH=0123456789abcdef0123456789abcdef ./tergram
+```
+
+Windows — PowerShell, session (or add to your profile:
+`$PROFILE`):
+
+```powershell
+$env:APP_ID = "1234567"
+$env:APP_HASH = "0123456789abcdef0123456789abcdef"
+```
+
+Persistent (all future sessions, no quoting needed):
+
+```powershell
+setx APP_ID 1234567
+setx APP_HASH 0123456789abcdef0123456789abcdef
+```
+
+Windows — cmd.exe, session only:
+
+```bat
+set APP_ID=1234567
+set APP_HASH=0123456789abcdef0123456789abcdef
+```
+
 Notes:
 - `tergram -demo` runs offline with synthetic data (no credentials needed).
 - `tergram -version` prints the version.
