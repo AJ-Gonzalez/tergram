@@ -61,6 +61,19 @@ Notes:
 - `tergram -demo` runs offline with synthetic data (no credentials needed).
 - `tergram -version` prints the version.
 
+### Hardware minimum for 32-bit builds
+
+The `386` release binaries (linux, windows, freebsd) require a processor with
+**SSE2** — Go dropped pre-SSE2 x86 support in 1.15. In practice that means
+Pentium 4 (2001) or later on the Intel side, and K8/Athlon 64-era or later on
+the AMD side. Pre-SSE2 chips (Pentium/MMX, Pentium Pro/II/III, AMD K6 and
+classic Athlon) cannot run any modern Go binary. amd64/arm64 builds have no
+such constraint.
+
+The full release matrix is built from `./build-all.sh` (local) or the
+`v*` tag workflow (CI): linux, darwin, windows and freebsd across the
+supported architectures (see `.github/workflows/release.yml`).
+
 ## License
 
 [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)
