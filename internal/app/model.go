@@ -26,12 +26,14 @@ type Model struct {
 	listIdx int
 
 	// level 1
-	openID    int64 // dialog id currently open
-	messages  []tgc.Message
-	msgCur    int  // highlighted message index (0 oldest .. n-1 newest)
-	inserting bool // composer insert mode (vim-style); false = browse mode
-	composer  []rune
-	composerN int // caret position within composer
+	openID        int64 // dialog id currently open
+	messages      []tgc.Message
+	msgCur        int    // highlighted message index (0 oldest .. n-1 newest)
+	inserting     bool   // composer insert mode (vim-style); false = browse mode
+	pendingSend   string // text waiting for a peer-refresh retry (stale peer on send)
+	peerRefreshed bool   // one refresh-retry per stale-peer failure (bounded)
+	composer      []rune
+	composerN     int // caret position within composer
 }
 
 // New returns the initial model.

@@ -269,6 +269,28 @@ func FloodWait(err error) (time.Duration, bool) {
 	return tgerr.AsFloodWait(err)
 }
 
+// RPCName returns the Telegram RPC error type name (e.g. "PEER_ID_INVALID")
+// if err is an RPC error, or "" otherwise. The name is the stable part of
+// the error the UI can hint at and act on.
+func RPCName(err error) string {
+	if rpcErr, ok := tgerr.As(err); ok {
+		return rpcErr.Type
+	}
+	return ""
+}
+
+// PeerRefreshable reports whether err is a peer-resolution 400 that a fresh
+// dialog fetch can plausibly fix: the server returns current access hashes
+// with every dialogs result, so a stale hash (e.g. after the peer renamed or
+// changed phone) heals on refresh.
+func PeerRefreshable(err error) bool {
+	switch RPCName(err) {
+	case "PEER_ID_INVALID", "CHANNEL_INVALID":
+		return true
+	}
+	return false
+}
+
 func (c *GotdClient) push(m *tg.Message) {
 	dialogID := peerClassID(m.PeerID)
 	u := Update{

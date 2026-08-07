@@ -22,7 +22,11 @@ type (
 		msgs []tgc.Message
 		err  error
 	}
-	sentMsg     struct{ err error }
+	sentMsg struct {
+		err         error
+		text        string // the attempted text, needed for a post-refresh retry
+		refreshPeer bool   // set when a dialog refresh could fix the failure
+	}
 	updateMsg   struct{ u tgc.Update }
 	pollStopped struct{}
 )
@@ -100,13 +104,37 @@ func (m Model) fetchMessages(d tgc.Dialog, attempt int) tea.Cmd {
 func (m Model) sendCmd(d tgc.Dialog, text string) tea.Cmd {
 	return func() tea.Msg {
 		err := m.client.Send(context.Background(), d, text)
-		if err != nil {
-			if wait, ok := tgc.FloodWait(err); ok {
-				err = fmt.Errorf("send throttled (%s); press enter to retry", wait.Round(time.Second))
-			}
+		if err == nil {
+			return sentMsg{text: text}
 		}
-		return sentMsg{err: err}
+		refreshPeer := tgc.PeerRefreshable(err)
+		if wait, ok := tgc.FloodWait(err); ok {
+			err = fmt.Errorf("send throttled (%s); press enter to retry", wait.Round(time.Second))
+		} else if name := tgc.RPCName(err); name != "" {
+			err = fmt.Errorf("%s (%s)", hintForSend(name), name)
+		}
+		return sentMsg{err: err, text: text, refreshPeer: refreshPeer}
 	}
+}
+
+// hintForSend maps common messages.sendMessage RPC errors to a one-line
+// explanation shown alongside the raw error name.
+func hintForSend(name string) string {
+	switch name {
+	case "PEER_ID_INVALID", "CHANNEL_INVALID":
+		return "chat peer is stale"
+	case "CHAT_WRITE_FORBIDDEN":
+		return "no permission to write in this chat"
+	case "USER_BANNED_IN_CHANNEL":
+		return "you are banned from this chat"
+	case "CHANNEL_PRIVATE":
+		return "channel is private"
+	case "MESSAGE_TOO_LONG":
+		return "message too long (4096 chars max)"
+	case "MESSAGE_EMPTY":
+		return "message is empty"
+	}
+	return "Telegram rejected the message"
 }
 
 // waitUpdates blocks on the client's update stream and re-polls after each
@@ -146,8 +174,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.dialogs = msg.dialogs
 		m.dialogsLoaded = true
-		m.listIdx = 0
 		m.err = ""
+		// Keep the cursor on the open chat across a refresh (peer retry);
+		// on the initial load there is none, so start at the top.
+		if i := m.dialogIndex(m.openID); i >= 0 {
+			m.listIdx = i
+		} else {
+			m.listIdx = 0
+		}
+		if m.pendingSend != "" {
+			text := m.pendingSend
+			m.pendingSend = ""
+			d, ok := m.dialogByID(m.openID)
+			if !ok {
+				m.err = "couldn't resend: chat is no longer in the list"
+				return m, nil
+			}
+			m.status = "retrying send…"
+			return m, m.sendCmd(d, text)
+		}
 		return m, nil
 
 	case floodRetryMsg:
@@ -185,9 +230,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case sentMsg:
 		if msg.err != nil {
+			if msg.refreshPeer && m.pendingSend == "" && !m.peerRefreshed {
+				// The peer's access hash went stale (PEER_ID_INVALID etc.).
+				// Refresh the chat list — dialogs results carry current
+				// hashes — and retry this exact send once. Bounded: the
+				// failed RPC was rejected, so retrying cannot double-send,
+				// and the latch prevents a second refresh cycle.
+				m.pendingSend = msg.text
+				m.peerRefreshed = true
+				m.status = "chat peer changed; refreshing chat list…"
+				return m, m.loadDialogsCmd()
+			}
+			// Any other send failure (or a failed retry) drops the retry
+			// state and surfaces the error.
+			m.pendingSend = ""
+			m.peerRefreshed = false
 			m.err = msg.err.Error()
 			return m, nil
 		}
+		// The retry resolved (or the send went through): clear the retry
+		// state so the next peer-invalid failure can refresh again.
+		m.pendingSend = ""
+		m.peerRefreshed = false
 		// Reload history so the sent message shows up (client echoes it in
 		// the update stream, but reloading keeps ordering correct).
 		if d, ok := m.currentDialog(); ok {
@@ -356,8 +420,29 @@ func (m Model) openChat() (tea.Model, tea.Cmd) {
 	m.inserting = false
 	m.composer = nil
 	m.composerN = 0
+	m.pendingSend = "" // a pending peer-refresh retry targets the old chat
+	m.peerRefreshed = false
 	m.loadingChat = true
 	return m, m.loadMessagesCmd(d)
+}
+
+// dialogIndex returns the list position of the dialog with the given ID,
+// or -1 if it is not in the list.
+func (m Model) dialogIndex(id int64) int {
+	for i, d := range m.dialogs {
+		if d.ID == id {
+			return i
+		}
+	}
+	return -1
+}
+
+// dialogByID returns the dialog with the given ID from the current list.
+func (m Model) dialogByID(id int64) (tgc.Dialog, bool) {
+	if i := m.dialogIndex(id); i >= 0 {
+		return m.dialogs[i], true
+	}
+	return tgc.Dialog{}, false
 }
 
 func (m *Model) levelBack() {
@@ -367,6 +452,8 @@ func (m *Model) levelBack() {
 	m.inserting = false
 	m.composer = nil
 	m.composerN = 0
+	m.peerRefreshed = false
+	m.pendingSend = ""
 }
 
 func (m *Model) moveMsg(delta int) {
