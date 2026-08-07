@@ -16,9 +16,9 @@ import (
 	"tergram/internal/tgc"
 )
 
-// version is the semantic version. It defaults to 0.2.0 and can be overridden
+// version is the semantic version. It defaults to 0.3.0 and can be overridden
 // at build time with: -ldflags "-X main.version=<tag>".
-var version = "0.2.0"
+var version = "0.3.0"
 
 // Bundled app credentials, injected at build time (kept out of the repo).
 // Default to empty so source builds always fail fast with a clear message
