@@ -41,8 +41,13 @@ func (m Model) chatListView() string {
 		return sb.String()
 	}
 
-	for i, d := range m.dialogs {
-		line := fmt.Sprintf(" %-40s %s", truncate(d.Title, 40), d.LastText)
+	start, end := m.listWindow()
+	for i := start; i <= end; i++ {
+		d := m.dialogs[i]
+		// Real chats carry long, multi-line last messages; collapse them to a
+		// one-line preview that fits next to the title column.
+		preview := truncate(oneLine(d.LastText), max(m.width-42, 12))
+		line := fmt.Sprintf(" %-40s %s", truncate(d.Title, 40), preview)
 		if i == m.listIdx {
 			line = ui.Highlight.Render(line)
 		} else {
@@ -158,6 +163,45 @@ func (m Model) msgWindow() (int, int) {
 		}
 	}
 	return start, end
+}
+
+// listWindow returns the [start,end] inclusive slice of m.dialogs to render
+// so the highlighted row stays on screen as the cursor moves.
+func (m Model) listWindow() (int, int) {
+	n := len(m.dialogs)
+	if n == 0 {
+		return 0, -1
+	}
+	visible := m.height - 4 // title, divider, hint, blank
+	if visible < 1 {
+		visible = 1
+	}
+	cur := m.listIdx
+	if cur < 0 {
+		cur = 0
+	}
+	if cur >= n {
+		cur = n - 1
+	}
+	start := cur - (visible - 1)
+	if start < 0 {
+		start = 0
+	}
+	end := start + visible - 1
+	if end >= n {
+		end = n - 1
+		start = end - (visible - 1)
+		if start < 0 {
+			start = 0
+		}
+	}
+	return start, end
+}
+
+// oneLine collapses every whitespace run (including newlines) into a single
+// space, so multi-line message text renders as one clean list row.
+func oneLine(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }
 
 func truncate(s string, n int) string {
