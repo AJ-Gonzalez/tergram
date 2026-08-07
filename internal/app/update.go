@@ -423,6 +423,7 @@ func (m Model) openChat() (tea.Model, tea.Cmd) {
 	m.pendingSend = "" // a pending peer-refresh retry targets the old chat
 	m.peerRefreshed = false
 	m.loadingChat = true
+	m.err = ""
 	return m, m.loadMessagesCmd(d)
 }
 
@@ -452,8 +453,9 @@ func (m *Model) levelBack() {
 	m.inserting = false
 	m.composer = nil
 	m.composerN = 0
-	m.peerRefreshed = false
 	m.pendingSend = ""
+	m.peerRefreshed = false
+	m.err = "" // a chat-level error must not follow the user to the list
 }
 
 func (m *Model) moveMsg(delta int) {
@@ -529,5 +531,6 @@ func (m Model) sendCurrent() (tea.Model, tea.Cmd) {
 	}
 	m.composer = nil
 	m.composerN = 0
+	m.err = "" // a new attempt replaces any stale error line
 	return m, tea.Batch(m.sendCmd(d, text), m.loadMessagesCmd(d))
 }

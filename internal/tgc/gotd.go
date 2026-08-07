@@ -18,6 +18,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/gotd/log/logzap"
+	"github.com/gotd/td/crypto"
 	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/auth"
@@ -403,9 +404,17 @@ func (c *GotdClient) Send(ctx context.Context, d Dialog, text string) error {
 	if err := c.waitReady(ctx); err != nil {
 		return err
 	}
-	_, err := c.api.MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{
-		Peer:    d.peer,
-		Message: text,
+	// random_id is the client-side dedup token; the server rejects a zero
+	// value with RANDOM_ID_EMPTY. gotd's high-level Sender fills it itself,
+	// but the raw MessagesSendMessage call does not.
+	id, err := crypto.RandInt64(crypto.DefaultRand())
+	if err != nil {
+		return err
+	}
+	_, err = c.api.MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{
+		Peer:     d.peer,
+		Message:  text,
+		RandomID: id,
 	})
 	return err
 }
