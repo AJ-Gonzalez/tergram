@@ -17,9 +17,10 @@ type Model struct {
 
 	width, height int
 
-	loadingChat bool
-	err         string
-
+	loadingChat   bool
+	err           string
+	status        string // transient info (e.g. flood-retry progress)
+	dialogsLoaded bool
 	// level 0
 	dialogs []tgc.Dialog
 	listIdx int

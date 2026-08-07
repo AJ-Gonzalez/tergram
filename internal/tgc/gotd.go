@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/term"
@@ -261,6 +262,13 @@ func resolveFlood(ctx context.Context, err error) error {
 	return err
 }
 
+// FloodWait returns the wait duration if err is a Telegram FLOOD_WAIT
+// (rate-limit) error, so the UI can wait it out and retry instead of
+// surfacing a dead-end error.
+func FloodWait(err error) (time.Duration, bool) {
+	return tgerr.AsFloodWait(err)
+}
+
 func (c *GotdClient) push(m *tg.Message) {
 	dialogID := peerClassID(m.PeerID)
 	u := Update{
@@ -292,7 +300,7 @@ func (c *GotdClient) Dialogs(ctx context.Context) ([]Dialog, error) {
 		return nil, err
 	}
 	var out []Dialog
-	err := query.GetDialogs(c.api).ForEach(ctx, func(ctx context.Context, elem dialogs.Elem) error {
+	err := query.GetDialogs(c.api).BatchSize(100).ForEach(ctx, func(ctx context.Context, elem dialogs.Elem) error {
 		if elem.Deleted() {
 			return nil
 		}
@@ -344,7 +352,7 @@ func (c *GotdClient) Messages(ctx context.Context, d Dialog) ([]Message, error) 
 		return nil, err
 	}
 	var out []Message
-	err := query.Messages(c.api).GetHistory(d.peer).ForEach(ctx, func(ctx context.Context, elem messages.Elem) error {
+	err := query.Messages(c.api).GetHistory(d.peer).BatchSize(100).ForEach(ctx, func(ctx context.Context, elem messages.Elem) error {
 		msg, ok := elem.Msg.(*tg.Message)
 		if !ok || msg.Message == "" {
 			return nil

@@ -24,12 +24,19 @@ func (m Model) chatListView() string {
 	sb.WriteString(lipgloss.PlaceHorizontal(m.width, lipgloss.Left, ui.Title.Render("tergram")) + "\n")
 	sb.WriteString(ui.Dim.Render(strings.Repeat("─", max(m.width, 0))) + "\n")
 
+	if m.status != "" {
+		sb.WriteString(ui.Dim.Render(m.status) + "\n")
+	}
 	if m.err != "" {
 		sb.WriteString(ui.Err.Render(m.err) + "\n")
 	}
 	if len(m.dialogs) == 0 {
 		if m.err == "" {
-			sb.WriteString(ui.Dim.Render("no conversations — press q to quit"))
+			if m.dialogsLoaded {
+				sb.WriteString(ui.Dim.Render("no conversations — press q to quit"))
+			} else {
+				sb.WriteString(ui.Dim.Render("loading conversations…"))
+			}
 		}
 		return sb.String()
 	}
@@ -59,6 +66,9 @@ func (m Model) chatView() string {
 	sb.WriteString(lipgloss.PlaceHorizontal(m.width, lipgloss.Left, ui.Title.Render(title)) + "\n")
 	sb.WriteString(ui.Dim.Render(strings.Repeat("─", max(m.width, 0))) + "\n")
 
+	if m.status != "" {
+		sb.WriteString(ui.Dim.Render(m.status) + "\n")
+	}
 	if m.loadingChat {
 		sb.WriteString(ui.Dim.Render("loading…"))
 		return sb.String()

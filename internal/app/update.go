@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -25,27 +27,85 @@ type (
 	pollStopped struct{}
 )
 
+// Flood-aware fetch retry. Telegram rate limits (FLOOD_WAIT) surface as plain
+// RPC errors; instead of showing a dead-end error screen we wait out the
+// required duration and retry, reporting progress on the status line. Sends
+// are never auto-retried (that could double-send); they get a friendly hint.
+type fetchStep int
+
+const (
+	stepDialogs fetchStep = iota
+	stepMessages
+)
+
+// maxFloodRetries bounds how many times a fetch retries after being
+// throttled before giving up with a clear message (~6 minutes at 27s waits).
+const maxFloodRetries = 12
+
+// floodRetryMsg reports a throttled fetch; the Update loop waits out wait and
+// re-issues the fetch via retryNowMsg.
+type floodRetryMsg struct {
+	what    string // label for the status line
+	wait    time.Duration
+	attempt int // 1-based attempt number that was throttled
+	step    fetchStep
+	d       tgc.Dialog // set for stepMessages
+}
+
+// retryNowMsg is emitted when a flood wait elapses; it re-issues the fetch.
+type retryNowMsg struct {
+	step    fetchStep
+	attempt int
+	d       tgc.Dialog
+}
+
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(m.loadDialogsCmd(), m.waitUpdates())
 }
 
 func (m Model) loadDialogsCmd() tea.Cmd {
+	return m.fetchDialogs(1)
+}
+
+func (m Model) fetchDialogs(attempt int) tea.Cmd {
 	return func() tea.Msg {
 		ds, err := m.client.Dialogs(context.Background())
-		return loadedDialogsMsg{dialogs: ds, err: err}
+		if err != nil {
+			if wait, ok := tgc.FloodWait(err); ok {
+				return floodRetryMsg{what: "chat list", wait: wait, attempt: attempt, step: stepDialogs}
+			}
+			return loadedDialogsMsg{err: err}
+		}
+		return loadedDialogsMsg{dialogs: ds}
 	}
 }
 
 func (m Model) loadMessagesCmd(d tgc.Dialog) tea.Cmd {
+	return m.fetchMessages(d, 1)
+}
+
+func (m Model) fetchMessages(d tgc.Dialog, attempt int) tea.Cmd {
 	return func() tea.Msg {
 		ms, err := m.client.Messages(context.Background(), d)
-		return loadedMessagesMsg{id: d.ID, msgs: ms, err: err}
+		if err != nil {
+			if wait, ok := tgc.FloodWait(err); ok {
+				return floodRetryMsg{what: "chat " + d.Title, wait: wait, attempt: attempt, step: stepMessages, d: d}
+			}
+			return loadedMessagesMsg{id: d.ID, err: err}
+		}
+		return loadedMessagesMsg{id: d.ID, msgs: ms}
 	}
 }
 
 func (m Model) sendCmd(d tgc.Dialog, text string) tea.Cmd {
 	return func() tea.Msg {
-		return sentMsg{err: m.client.Send(context.Background(), d, text)}
+		err := m.client.Send(context.Background(), d, text)
+		if err != nil {
+			if wait, ok := tgc.FloodWait(err); ok {
+				err = fmt.Errorf("send throttled (%s); press enter to retry", wait.Round(time.Second))
+			}
+		}
+		return sentMsg{err: err}
 	}
 }
 
@@ -74,17 +134,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateKey(msg)
 
 	case loadedDialogsMsg:
+		m.status = ""
 		if msg.err != nil {
 			m.err = msg.err.Error()
 			return m, nil
 		}
 		m.dialogs = msg.dialogs
+		m.dialogsLoaded = true
 		m.listIdx = 0
 		m.err = ""
 		return m, nil
 
+	case floodRetryMsg:
+		if msg.attempt > maxFloodRetries {
+			m.status = ""
+			m.err = fmt.Sprintf("%s still throttled after %d retries; restart the app to try again", msg.what, maxFloodRetries)
+			return m, nil
+		}
+		m.status = fmt.Sprintf("Telegram is throttling the %s (%s); retrying…", msg.what, msg.wait.Round(time.Second))
+		return m, tea.Tick(msg.wait+time.Second, func(time.Time) tea.Msg {
+			return retryNowMsg{step: msg.step, attempt: msg.attempt + 1, d: msg.d}
+		})
+
+	case retryNowMsg:
+		switch msg.step {
+		case stepDialogs:
+			return m, m.fetchDialogs(msg.attempt)
+		case stepMessages:
+			return m, m.fetchMessages(msg.d, msg.attempt)
+		}
+		return m, nil
+
 	case loadedMessagesMsg:
 		m.loadingChat = false
+		m.status = ""
 		if msg.err != nil {
 			m.err = msg.err.Error()
 			return m, nil
