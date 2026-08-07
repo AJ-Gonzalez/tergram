@@ -133,6 +133,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.updateKey(msg)
 
+	case tea.PasteMsg:
+		// Bracketed-paste text (Ctrl+Shift+V / middle click) lands whole in
+		// one message; insert it into the composer at the caret.
+		return m.paste(msg.Content), nil
+
 	case loadedDialogsMsg:
 		m.status = ""
 		if msg.err != nil {
@@ -383,6 +388,28 @@ func (m *Model) insertComposer(s string) {
 	at := m.composerN
 	m.composer = append(m.composer[:at], append(runes, m.composer[at:]...)...)
 	m.composerN = at + len(runes)
+}
+
+// paste inserts bracketed-paste text into the composer. In browse mode it
+// starts composing first (matching the vim-like unbound-key behavior); at
+// level 0 there is no composer, so the paste is ignored.
+func (m Model) paste(text string) Model {
+	if m.level() != 1 {
+		return m
+	}
+	// The composer is a single-line input; collapse line breaks to spaces so
+	// multi-line pastes don't break the fixed composer block layout.
+	text = strings.ReplaceAll(text, "\r\n", " ")
+	text = strings.ReplaceAll(text, "\n", " ")
+	text = strings.ReplaceAll(text, "\r", " ")
+	if text == "" {
+		return m
+	}
+	if !m.inserting {
+		m.inserting = true
+	}
+	m.insertComposer(text)
+	return m
 }
 
 func (m *Model) composerBackspace() {

@@ -154,6 +154,55 @@ func TestOpenChatComposeSend(t *testing.T) {
 	}
 }
 
+func TestPasteIntoComposer(t *testing.T) {
+	m := newLoaded(t)
+
+	// Paste at level 0 (chat list) is ignored — there is no composer.
+	m, _ = step(m, tea.PasteMsg{Content: "hello"})
+	if m.level() != 0 || len(m.composer) != 0 {
+		t.Fatalf("paste at level 0 should be ignored")
+	}
+
+	// Open a chat; it starts in browse mode.
+	m, cmd := step(m, key("space"))
+	m, _ = load(m, cmd)
+	if m.inserting {
+		t.Fatalf("chat should open in browse mode")
+	}
+
+	// Paste in browse mode starts composing and inserts the text,
+	// collapsing line breaks to spaces (single-line composer).
+	m, _ = step(m, tea.PasteMsg{Content: "line1\r\nline2\nline3"})
+	if !m.inserting {
+		t.Fatalf("paste in browse mode should enter compose mode")
+	}
+	if got := string(m.composer); got != "line1 line2 line3" {
+		t.Fatalf("composer: expected %q, got %q", "line1 line2 line3", got)
+	}
+	if m.composerN != len(m.composer) {
+		t.Fatalf("caret should sit after pasted text")
+	}
+
+	// Paste in insert mode appends at the caret.
+	m, _ = step(m, tea.PasteMsg{Content: "!"})
+	if got := string(m.composer); got != "line1 line2 line3!" {
+		t.Fatalf("composer: expected %q, got %q", "line1 line2 line3!", got)
+	}
+
+	// Pasting with the caret in the middle inserts there.
+	m.composerN = 5
+	m, _ = step(m, tea.PasteMsg{Content: "X"})
+	if got := string(m.composer); got != "line1X line2 line3!" {
+		t.Fatalf("composer: expected %q, got %q", "line1X line2 line3!", got)
+	}
+
+	// Empty paste is a no-op.
+	m, _ = step(m, tea.PasteMsg{Content: ""})
+	if got := string(m.composer); got != "line1X line2 line3!" {
+		t.Fatalf("empty paste should not change the composer")
+	}
+}
+
 func TestEscAndQLevels(t *testing.T) {
 	m := newLoaded(t)
 
